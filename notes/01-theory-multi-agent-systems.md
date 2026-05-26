@@ -278,15 +278,13 @@ completeness, and actionability. Explain your reasoning."
 
 ## Checkpoint Questions
 
-Before moving to architecture design, answer these:
+Before moving to architecture design, answer these in `notes/checkpoint-01-theory.md`:
 
 1. Why is multi-agent better than a single LLM prompt for our use case?
 2. What are the 3 components of the ReAct loop?
 3. What's the difference between KV and D1, and why do we use both?
 4. What makes a good system prompt?
 5. How will we know if our agents are working well?
-
-Write your answers in a new file: `notes/checkpoint-01-theory.md`
 
 ---
 

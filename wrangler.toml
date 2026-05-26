@@ -3,23 +3,23 @@ main = "src/index.ts"
 compatibility_date = "2024-05-12"
 
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 
 # KV Namespace for conversation memory
 [[kv_namespaces]]
 binding = "SESSION_KV"
-id = "your-kv-namespace-id"
+id = "86c4c43005c04edcb6f0d9f95e78e8c2"
 
 # D1 Database for audit logs
 [[d1_databases]]
 binding = "AUDIT_DB"
 database_name = "ai-sales-copilot-audit"
-database_id = "your-d1-database-id"
+database_id = "b2ce5891-d006-43f2-92b4-14327121f3ac"
 
 # Vectorize for RAG on Cloudflare docs
-[[vectorize]]
-binding = "VECTORIZE"
-index_name = "cloudflare-docs"
+# [[vectorize]]
+# binding = "VECTORIZE"
+# index_name = "cloudflare-docs"
 
 # AI Gateway for routing between providers
 [ai]

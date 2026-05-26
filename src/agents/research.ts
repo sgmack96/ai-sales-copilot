@@ -101,7 +101,7 @@ Output ONLY valid JSON, no markdown formatting.`;
       // 3. Get recent news
       console.log(`[ResearchAgent] Fetching news...`);
       const news = await NewsAPITool.execute(
-        { query: companyName, days: 180, maxResults: 5 },
+        { query: companyName, days: 30, maxResults: 5 },
         env
       ) as { articles?: Array<{ title: string; description: string; url: string; publishedAt: string; source: string }>; error?: string };
 

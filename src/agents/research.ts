@@ -12,6 +12,9 @@ import { NewsAPITool } from "../tools/news-api";
  * - News API (recent articles)
  * 
  * Then synthesizes raw data into structured output using Workers AI.
+ * 
+ * Fallback: If web search fails, tries common URL patterns, then falls back
+ * to AI-only research with the LLM's training data.
  */
 
 export class ResearchAgent implements Agent {
@@ -50,40 +53,70 @@ Output ONLY valid JSON, no markdown formatting.`;
     const startTime = Date.now();
     const companyName = this.extractCompanyName(input.message);
 
+    console.log(`[ResearchAgent] Starting research for: ${companyName}`);
+
     try {
       // === PHASE 1: Gather Raw Data with Tools ===
       
       // 1. Search for the company's main website
+      console.log(`[ResearchAgent] Searching web...`);
       const searchResults = await WebSearchTool.execute(
         { query: `${companyName} official website`, numResults: 3 },
         env
       ) as { results?: Array<{ title: string; url: string; snippet: string }>; error?: string };
 
+      console.log(`[ResearchAgent] Search results: ${searchResults.results?.length || 0} found, error: ${searchResults.error || 'none'}`);
+
+      // Fallback: If search fails, try common URL patterns
+      let websiteUrl: string | undefined;
+      let searchData = searchResults.results || [];
+
       if (searchResults.error || !searchResults.results?.length) {
-        throw new Error(`Could not find website for ${companyName}`);
+        console.log(`[ResearchAgent] Search failed, trying fallback URLs...`);
+        websiteUrl = await this.tryFallbackUrls(companyName, env);
+        
+        if (!websiteUrl) {
+          console.log(`[ResearchAgent] Fallback URLs failed, using AI-only mode`);
+          return this.fallbackToAI(companyName, env);
+        }
+      } else {
+        websiteUrl = searchResults.results[0].url;
       }
 
-      const mainResult = searchResults.results[0];
-      const websiteUrl = mainResult.url;
+      console.log(`[ResearchAgent] Target website: ${websiteUrl}`);
 
       // 2. Scrape their website
+      console.log(`[ResearchAgent] Scraping website...`);
       const scraped = await WebScraperTool.execute(
         { url: websiteUrl, maxLength: 8000 },
         env
       ) as { text?: string; title?: string; error?: string };
 
+      if (scraped.error) {
+        console.log(`[ResearchAgent] Scrape failed: ${scraped.error}`);
+      } else {
+        console.log(`[ResearchAgent] Scraped ${scraped.text?.length || 0} chars`);
+      }
+
       // 3. Get recent news
+      console.log(`[ResearchAgent] Fetching news...`);
       const news = await NewsAPITool.execute(
         { query: companyName, days: 180, maxResults: 5 },
         env
       ) as { articles?: Array<{ title: string; description: string; url: string; publishedAt: string; source: string }>; error?: string };
+
+      if (news.error) {
+        console.log(`[ResearchAgent] News fetch failed: ${news.error}`);
+      } else {
+        console.log(`[ResearchAgent] Fetched ${news.articles?.length || 0} articles`);
+      }
 
       // === PHASE 2: Synthesize with Workers AI ===
 
       const rawData = {
         company_name: companyName,
         website: websiteUrl,
-        search_results: searchResults.results.map(r => ({
+        search_results: searchData.map(r => ({
           title: r.title,
           snippet: r.snippet,
         })),
@@ -97,51 +130,94 @@ Output ONLY valid JSON, no markdown formatting.`;
         })),
       };
 
-      const synthesisPrompt = `${this.systemPrompt}\n\nRAW RESEARCH DATA:\n${JSON.stringify(rawData, null, 2)}\n\nSYNTHESIZED OUTPUT (JSON only):`;
+      return await this.synthesize(companyName, websiteUrl, rawData, env, scraped.error ? 0.6 : 0.85);
 
+    } catch (error) {
+      console.error("[ResearchAgent] Critical failure:", error);
+      
+      // Ultimate fallback: AI-only
+      return this.fallbackToAI(companyName, env);
+    }
+  }
+
+  /**
+   * Try common URL patterns when search fails
+   */
+  private async tryFallbackUrls(companyName: string, env: Env): Promise<string | undefined> {
+    // Clean company name for URL
+    const clean = companyName.toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .replace(/inc$|corp$|llc$|ltd$/i, "");
+
+    const candidates = [
+      `https://www.${clean}.com`,
+      `https://${clean}.com`,
+      `https://www.${clean}.io`,
+      `https://${clean}.io`,
+    ];
+
+    for (const url of candidates) {
+      try {
+        console.log(`[ResearchAgent] Trying fallback URL: ${url}`);
+        const response = await fetch(url, { method: "HEAD", redirect: "follow" });
+        if (response.ok) {
+          // Return the final URL after redirects
+          return response.url;
+        }
+      } catch {
+        // Try next
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Fallback to AI-only research when all tools fail
+   */
+  private async fallbackToAI(companyName: string, env: Env): Promise<AgentOutput> {
+    console.log(`[ResearchAgent] Falling back to AI-only mode for ${companyName}`);
+
+    const prompt = `${this.systemPrompt}
+
+No live data could be gathered for ${companyName}. 
+Use your training data to provide the best possible company profile.
+Be explicit about what information comes from training data vs live sources.
+
+Output JSON:`;
+
+    try {
       const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
-        prompt: synthesisPrompt,
+        prompt,
         max_tokens: 2500,
-        temperature: 0.2,
+        temperature: 0.3,
       });
 
       const text = (aiResponse as { response?: string }).response || "";
 
-      // Parse JSON output
       let data: unknown;
       try {
         const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
         const jsonStr = jsonMatch ? jsonMatch[1] : text;
         data = JSON.parse(jsonStr);
       } catch {
-        data = { 
-          raw_response: text,
-          parse_error: "Could not parse AI response as JSON" 
-        };
+        data = { raw_response: text };
       }
-
-      const sources = [
-        websiteUrl,
-        ...(news.articles?.map(a => a.url) || []),
-      ].filter(Boolean);
 
       return {
         agent: this.name,
-        status: "success",
+        status: "partial",
         data,
-        reasoning: `Searched web for ${companyName}, scraped ${websiteUrl}, fetched ${news.articles?.length || 0} news articles. Synthesized with Workers AI.`,
-        sources,
-        confidence: scraped.error ? 0.6 : 0.85,
+        reasoning: `Web search and scraping failed. Used AI training data as fallback for ${companyName}. Information may be outdated.`,
+        sources: ["workers-ai-training-data"],
+        confidence: 0.5,
       };
-
     } catch (error) {
-      console.error("ResearchAgent failed:", error);
-      
       return {
         agent: this.name,
         status: "failure",
         data: null,
-        reasoning: `Research failed after ${Date.now() - startTime}ms: ${error instanceof Error ? error.message : "Unknown error"}`,
+        reasoning: `All research methods failed for ${companyName}: ${error instanceof Error ? error.message : "Unknown error"}`,
         sources: [],
         confidence: 0,
       };
@@ -149,13 +225,56 @@ Output ONLY valid JSON, no markdown formatting.`;
   }
 
   /**
+   * Synthesize gathered data using Workers AI
+   */
+  private async synthesize(
+    companyName: string,
+    websiteUrl: string,
+    rawData: unknown,
+    env: Env,
+    confidence: number
+  ): Promise<AgentOutput> {
+    const synthesisPrompt = `${this.systemPrompt}
+
+RAW RESEARCH DATA:
+${JSON.stringify(rawData, null, 2)}
+
+SYNTHESIZED OUTPUT (JSON only):`;
+
+    const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
+      prompt: synthesisPrompt,
+      max_tokens: 2500,
+      temperature: 0.2,
+    });
+
+    const text = (aiResponse as { response?: string }).response || "";
+
+    let data: unknown;
+    try {
+      const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+      const jsonStr = jsonMatch ? jsonMatch[1] : text;
+      data = JSON.parse(jsonStr);
+    } catch {
+      data = { 
+        raw_response: text,
+        parse_error: "Could not parse AI response as JSON" 
+      };
+    }
+
+    return {
+      agent: this.name,
+      status: "success",
+      data,
+      reasoning: `Researched ${companyName} via web search, scraped ${websiteUrl}, and fetched news. Synthesized with Workers AI.`,
+      sources: [websiteUrl],
+      confidence,
+    };
+  }
+
+  /**
    * Extract company name from user message
-   * Simple approach: take everything after "research" or use the whole message
    */
   private extractCompanyName(message: string): string {
-    const lower = message.toLowerCase();
-    
-    // Common patterns: "Research Stripe", "Tell me about Stripe", "What does Stripe do"
     const patterns = [
       /research\s+(.+)/i,
       /tell me about\s+(.+)/i,
@@ -171,7 +290,6 @@ Output ONLY valid JSON, no markdown formatting.`;
       }
     }
 
-    // Fallback: just use the message (minus common words)
     return message.replace(/^(research|about|find)\s+/i, "").trim();
   }
 }

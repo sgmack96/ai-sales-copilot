@@ -17,9 +17,9 @@ database_name = "ai-sales-copilot-audit"
 database_id = "b2ce5891-d006-43f2-92b4-14327121f3ac"
 
 # Vectorize for RAG on Cloudflare docs
-# [[vectorize]]
-# binding = "VECTORIZE"
-# index_name = "cloudflare-docs"
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "cloudflare-docs"
 
 # AI Gateway for routing between providers
 [ai]

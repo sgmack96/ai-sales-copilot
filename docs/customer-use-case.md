@@ -1,124 +1,125 @@
 # Customer Use Case: AI Sales Co-Pilot
 
-> **For:** Cloudflare Solutions Engineers selling to startups and enterprises  
-> **Value:** Reduce pre-call research time from 45 minutes to 2 minutes  
-> **Built on:** Cloudflare Workers, Workers AI, KV, D1, AI Gateway
+> **For:** Cloudflare Solutions Engineers selling to startups and enterprises
+> **Value:** Reduce pre-call research from 45 minutes to 15 seconds. Get a full migration plan in under a minute.
+> **Built on:** Cloudflare Workers, Workers AI, Vectorize, KV, D1
+> **Live:** https://ai-sales-copilot.stephenmack96.workers.dev
 
 ---
 
 ## The Problem
 
-As a Cloudflare Solutions Engineer, you have **15-20 customer calls per week**. For each call, you spend **30-60 minutes** researching:
+As a Cloudflare Solutions Engineer, you have **15-20 customer calls per week**. For each call, you spend **30-60 minutes** on two things:
 
-- What does the company do?
-- What's their current tech stack?
-- Any recent news (funding, launches, outages)?
-- Who are their competitors?
-- Where does Cloudflare fit?
+**1. Research** (30 min) — Who is this company? What do they do? What tech do they use? Any recent news?
 
-**That's 10-15 hours per week on research alone.** Time you could spend building relationships, architecting solutions, or closing deals.
+**2. Architecture** (30 min) — They're on AWS Lambda, CloudFront, and S3. What's the Cloudflare equivalent? What's the migration path? What will they save?
+
+**That's 15-20 hours per week.** Time you could spend building relationships, running demos, or closing deals.
 
 ---
 
 ## The Solution
 
-An AI co-pilot that researches prospects in **under 15 seconds** using real-time web data.
+Two AI agents that handle both workflows:
 
-### Before (Manual Research)
+### Agent 1: Research — "Research Stripe"
 
-```
-9:00 AM — Calendar reminder: "Call with Stripe at 10:00 AM"
-9:01 AM — Open Chrome tabs:
-          - stripe.com (read homepage, about, careers)
-          - TechCrunch search "Stripe recent news"
-          - LinkedIn "Stripe engineering"
-          - Crunchbase "Stripe funding"
-          - Competitors: Adyen, Square, PayPal
-9:45 AM — Compile notes in Google Doc
-9:55 AM — Review Cloudflare product fit
-10:00 AM — Join call (barely ready)
-```
-
-**Time: 45-60 minutes**
-
-### After (AI Co-Pilot)
+Gathers real-time intelligence on any prospect in **~15 seconds**:
 
 ```
-9:55 AM — Slack the co-pilot: "Research Stripe"
-9:55:15 AM — Get structured profile:
+Before:
+  9:00 AM — Open 6 Chrome tabs, read through each one
+  9:45 AM — Compile notes in a Google Doc
+  Time: 45 minutes
 
-  Company: Stripe
-  Tech Stack: Ruby, AWS, CloudFront, Auth0
-  Recent News: Launched Treasury API (2 weeks ago)
-  Competitors: Adyen, Square, PayPal
-  Cloud Opportunities:
-    - Replace CloudFront with Workers + Cache (better edge perf)
-    - Add Bot Management (fraud prevention)
-    - Use D1 for global financial data
-    - AI Gateway for their new AI features
-
-10:00 AM — Join call (fully prepared)
+After:
+  9:55 AM — "Research Stripe"
+  9:55:15 — Structured profile returned:
+    Company: Stripe
+    Tech Stack: Ruby, AWS, CloudFront, Auth0
+    Recent News: Launched Treasury API (2 weeks ago)
+    Competitors: Adyen, Square, PayPal
+    Cloudflare Opportunities:
+      - Replace CloudFront with CDN + Cache
+      - Add Bot Management for fraud prevention
+      - D1 for global financial data
+  Time: 15 seconds
 ```
 
-**Time: 15 seconds**
+**How it works:** Web search, website scraping, news API, then Workers AI synthesis into structured JSON. Falls back gracefully if any data source fails.
+
+### Agent 2: Architecture — "They use Lambda, CloudFront, S3, RDS, and Cisco VPN"
+
+Designs a complete Cloudflare migration plan in **~30-40 seconds**:
+
+```json
+{
+  "component_mapping": [
+    {"current": "AWS Lambda",        "cloudflare": "Workers",        "complexity": "moderate"},
+    {"current": "AWS CloudFront",    "cloudflare": "CDN",            "complexity": "simple"},
+    {"current": "AWS S3",            "cloudflare": "R2",             "complexity": "simple"},
+    {"current": "AWS RDS",           "cloudflare": "D1",             "complexity": "complex"},
+    {"current": "Cisco AnyConnect",  "cloudflare": "Access",         "complexity": "simple"}
+  ],
+  "migration_path": {
+    "phase_1_quick_wins": ["CDN migration", "R2 for storage"],
+    "phase_2_core": ["Workers for compute", "DDoS + WAF"],
+    "phase_3_optimize": ["Tunnel + Magic WAN", "Access for Zero Trust"]
+  },
+  "cost_comparison": {
+    "current_estimated_monthly": "$10,000 - $20,000",
+    "target_estimated_monthly": "$5,000 - $10,000",
+    "savings_percentage": "50-75%"
+  },
+  "gaps": ["No direct equivalent for relational databases at RDS scale"],
+  "confidence": 0.8
+}
+```
+
+**How it works:** Regex extracts every tech component from your message. Parallel Vectorize queries retrieve relevant Cloudflare product docs (80 chunks covering 20 products). Workers AI generates the architecture with real pricing data, migration phases, and honest gap analysis.
+
+**Key detail:** Recommendations are grounded in actual product documentation, not hallucinations. The agent can only recommend products it has docs for.
 
 ---
 
-## Architecture
+## Why Cloudflare (Not OpenAI + Lambda)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     CLOUDFLARE EDGE                         │
-│                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │   Hono      │───→│ Orchestrator│───→│   Agents    │     │
-│  │   Router    │    │ (Workers AI)│    │ (Workers AI)│     │
-│  └─────────────┘    └─────────────┘    └──────┬──────┘     │
-│                                                │            │
-│  ┌─────────────┐    ┌─────────────┐    ┌──────▼──────┐     │
-│  │  KV Cache   │    │  D1 Audit   │    │   Tools     │     │
-│  │  (Memory)   │    │  (Logging)  │    │ (Web/News)  │     │
-│  └─────────────┘    └─────────────┘    └─────────────┘     │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+This co-pilot is itself a proof point for the Cloudflare platform:
 
-**Why Cloudflare?**
+| Layer | What We Used | Why Not the Alternative |
+|-------|-------------|----------------------|
+| Compute | **Workers** | Lambda has 200-500ms cold starts. Workers: 0ms. |
+| AI Inference | **Workers AI** (Llama 3 8B) | No API keys to manage, no egress costs, free on Paid plan |
+| Vector Search | **Vectorize** (80 chunks, 768 dims) | Pinecone charges $70/mo for the same index size |
+| Embeddings | **Workers AI** (BGE Base EN v1.5) | OpenAI Embeddings: $0.13/million tokens. Workers AI: free. |
+| Session Memory | **KV** | DynamoDB: $1.25/million reads. KV: $0.50/million. |
+| Audit Logs | **D1** | RDS: $50/mo minimum. D1: $0.001/million reads. |
+| Secrets | **Wrangler Secrets** | No Vault, no SSM Parameter Store, no env files in repos |
 
-| Feature | Why It Matters |
-|---------|---------------|
-| **Workers (Edge Compute)** | Sub-50ms response time globally |
-| **Workers AI** | No API keys, no egress costs, runs at the edge |
-| **KV** | Session memory replicated worldwide in <1s |
-| **D1** | Audit logs for compliance and improvement |
-| **AI Gateway** | Route to OpenAI/Anthropic if Workers AI isn't enough |
-| **Vectorize** | RAG on Cloudflare docs for architecture recommendations |
+**Total infrastructure cost: ~$5/month** for thousands of requests. The equivalent on AWS would be $50-200/month before you write a line of code.
 
 ---
 
 ## The Pitch to Customers
 
-### For Startups (Seed → Series C)
+### For Startups (Seed to Series C)
 
-**Problem:** "We have 3 sales reps. Each spends 2 hours/day on research. That's 30 hours/week we can't spend selling."
+> "Your team spends 2 hours per rep per day on pre-call research. That's 30 hours a week across 3 reps. This co-pilot does the same work in 15 seconds for $0.002 per call. Deploy it on Workers, same platform your app runs on."
 
-**Solution:** "Deploy this co-pilot on Cloudflare Workers. It costs ~$0.002 per research call. Your team gets 30 hours back per week."
-
-**ROI:**
-- 3 reps × 2 hours/day × $75/hour = $450/day in saved time
-- Co-pilot cost: ~$5/month
-- **ROI: 90x**
+**ROI math:**
+- 3 reps x 2 hours/day x $75/hour = **$450/day saved**
+- Co-pilot cost: **~$5/month**
+- ROI: **90x**
 
 ### For Enterprises
 
-**Problem:** "Our SE team does 500 calls/month. Research quality varies by rep. Some miss critical intel."
+> "500 calls a month across your SE team. Research quality varies by rep. Senior SEs prep well, junior ones wing it. This standardizes the output. Every rep gets the same depth of research. Every call has an architecture sketch before it starts. And you get an audit trail of what was researched, when, by whom."
 
-**Solution:** "Standardized research with audit trails. Every rep gets the same quality intel. Managers see what research was done before every call."
-
-**ROI:**
-- Consistent research = better calls = higher close rates
-- Audit trail = compliance + coaching opportunities
-- Scale: One co-pilot handles unlimited SEs
+**Enterprise value:**
+- Consistent research quality = better calls = higher close rates
+- Audit trail in D1 = compliance + coaching opportunities
+- Architecture Agent = faster technical scoping, shorter sales cycles
 
 ---
 
@@ -126,82 +127,90 @@ An AI co-pilot that researches prospects in **under 15 seconds** using real-time
 
 | | AI Sales Co-Pilot | Manual Research | Apollo.io | ZoomInfo |
 |---|:---:|:---:|:---:|:---:|
-| **Time per research** | 15s | 45 min | 5 min | 3 min |
+| **Research time** | 15s | 45 min | 5 min | 3 min |
+| **Architecture design** | Built-in | Manual (30 min) | Not available | Not available |
 | **Data freshness** | Real-time | Manual | Daily | Weekly |
-| **Custom analysis** | ✅ AI synthesis | ❌ | ❌ | ❌ |
-| **Architecture design** | ✅ Built-in | ❌ | ❌ | ❌ |
+| **Custom AI analysis** | Yes | No | No | No |
 | **Cost per call** | $0.002 | $37.50 (labor) | $0.10 | $0.50 |
-| **Deploy anywhere** | ✅ Edge | N/A | ❌ Cloud-only | ❌ Cloud-only |
+| **Runs on your infra** | Yes (Workers) | N/A | No (SaaS) | No (SaaS) |
+| **Migration planning** | Automated | Manual | No | No |
 
-**Key differentiator:** This isn't just data lookup. It's **AI-powered synthesis** that tells you *why Cloudflare matters for this prospect*.
+**Key differentiator:** Apollo and ZoomInfo give you contact data. This gives you **technical intelligence** — what they're running, what to replace it with, what it'll cost, and what you'll save them.
 
 ---
 
-## Real Example Output
+## Live Demo
 
-```json
-{
-  "company_name": "Stripe",
-  "website": "https://stripe.com",
-  "description": "Financial infrastructure for the internet",
-  "tech_stack": ["Ruby", "AWS", "CloudFront", "Auth0"],
-  "recent_news": [
-    "Stripe launches Treasury API (March 2026)",
-    "Stripe expands to 5 new markets"
-  ],
-  "competitors": ["Adyen", "Square", "PayPal"],
-  "cloud_opportunities": [
-    "Replace CloudFront → Workers + Cache (30% faster)",
-    "Add Bot Management (reduce fraud by $2M/year)",
-    "Use D1 for global financial data consistency",
-    "AI Gateway for Stripe's new AI fraud detection"
-  ]
-}
+The co-pilot is deployed and running. Try it:
+
+```bash
+# Health check
+curl https://ai-sales-copilot.stephenmack96.workers.dev/health
+
+# Research a company
+curl -X POST https://ai-sales-copilot.stephenmack96.workers.dev/api/v1/copilot \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "demo-001", "message": "Research Datadog"}'
+
+# Design a migration
+curl -X POST https://ai-sales-copilot.stephenmack96.workers.dev/api/v1/copilot \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "demo-002", "message": "Design architecture for a startup using Vercel, Supabase, and Auth0"}'
 ```
 
 ---
 
-## Deployment Options
+## Architecture Diagram
 
-### Option 1: Cloudflare Workers (Recommended)
-- **Cost:** ~$5/month for 10,000 research calls
-- **Latency:** <100ms globally
-- **Setup:** `git clone` + `wrangler deploy`
-
-### Option 2: Self-Hosted (Docker/K8s)
-- **Cost:** $200-500/month (compute + egress)
-- **Latency:** Depends on region
-- **Setup:** Complex, needs ML ops team
-
-### Option 3: AWS Lambda
-- **Cost:** ~$50/month + API costs
-- **Latency:** 200-500ms (cold starts)
-- **Setup:** Complex IAM, VPC, API Gateway
-
-**Recommendation:** Cloudflare Workers is **10x cheaper** and **5x faster** than alternatives.
-
----
-
-## Security & Compliance
-
-- **No customer data stored** — Research is ephemeral
-- **Audit logs** — Every research call logged in D1
-- **API keys in Secrets** — Never in code
-- **Rate limiting** — Built-in Cloudflare protection
-- **PII filtering** — Can be added with AI Gateway guardrails
-
----
-
-## Next Steps for Your Team
-
-1. **Clone the repo:** `git clone https://github.com/sgmack96/ai-sales-copilot`
-2. **Add your API keys:** `wrangler secret put NEWS_API_KEY`
-3. **Deploy:** `wrangler deploy`
-4. **Test:** `curl -X POST https://your-worker.dev/api/v1/copilot -d '{"message":"Research Stripe"}'`
-5. **Customize:** Add your own agents (security review, compliance check)
+```
+                    ┌───────────────┐
+                    │  POST /copilot│
+                    └───────┬───────┘
+                            │
+                ┌───────────▼───────────┐
+                │     ORCHESTRATOR      │
+                │                       │
+                │  Keyword classify     │  ← Regex (0ms)
+                │  LLM fallback         │  ← Workers AI (if ambiguous)
+                │  Route to agent       │
+                │  Store session → KV   │
+                │  Log audit → D1       │
+                └───┬───────────┬───────┘
+                    │           │
+          ┌─────────▼──┐  ┌────▼──────────┐
+          │  Research   │  │ Architecture  │
+          │   Agent     │  │    Agent      │
+          │             │  │              │
+          │ Web search  │  │ Regex extract │
+          │ Scrape site │  │ Vectorize RAG │
+          │ News API    │  │ Workers AI    │
+          │ Workers AI  │  │ JSON output   │
+          └─────────────┘  └───────────────┘
+```
 
 ---
 
-*Built by a Cloudflare SE, for Cloudflare SEs.*
+## Security and Compliance
 
-**Questions?** Open an issue on GitHub or reach out on Slack.
+- **No PII stored** — research is ephemeral, session history in KV auto-expires
+- **Audit trail** — every agent run logged to D1 with session ID, agent name, input, output, latency
+- **Secrets management** — API keys stored in Wrangler Secrets, never in code or env files
+- **No external compute** — everything runs on Cloudflare, no data leaves the network
+- **Rate limiting** — Cloudflare's built-in rate limiting protects the endpoint
+
+---
+
+## Setup (5 Minutes)
+
+```bash
+git clone https://github.com/sgmack96/ai-sales-copilot.git
+cd ai-sales-copilot
+npm install
+wrangler secret put NEWS_API_KEY
+npx wrangler deploy
+curl -X POST https://your-worker.workers.dev/admin/seed  # Index product docs
+```
+
+---
+
+*Built by a Cloudflare SE who got tired of opening 6 Chrome tabs before every call.*
